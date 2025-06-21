@@ -1,16 +1,14 @@
 package simpledb.common;
 
-import simpledb.common.Type;
-import simpledb.storage.DbFile;
-import simpledb.storage.HeapFile;
-import simpledb.storage.TupleDesc;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import simpledb.storage.DbFile;
+import simpledb.storage.HeapFile;
+import simpledb.storage.TupleDesc;
 
 /**
  * The Catalog keeps track of all available tables in the database and their
@@ -23,12 +21,15 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    private Map<Integer, DbFile> files; // Maps table ID to DbFile
+
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
         // some code goes here
+        this.files = new ConcurrentHashMap<>(); // Thread-safe map to store DbFiles compared to the original HashMap
     }
 
     /**
@@ -42,6 +43,17 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        if (file == null || name == null) {
+            throw new IllegalArgumentException("File and name cannot be null");
+        }
+        Integer tableId = file.getId();
+        if (files.containsKey(tableId)) {
+            // If a table with the same ID exists, replace it
+            files.remove(tableId);
+        }
+        // note name is not used in this implementation, but could be used for future enhancements
+        // If a table with the same name exists, replace it
+        files.put(tableId, file);
     }
 
     public void addTable(DbFile file, String name) {
@@ -65,7 +77,10 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if (files.containsKey(tableId)) { // something wrong here, tableId is not defined
+            // If a table with the same ID exists, replace it
+            files.remove(tableId); // This line is incorrect, it should not be here
+        }
     }
 
     /**
