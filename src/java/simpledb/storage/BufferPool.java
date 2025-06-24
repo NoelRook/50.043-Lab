@@ -88,14 +88,13 @@ public class BufferPool {
         // if page is not in the bufferpool
         Page newPage = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid); // retrieve from the catalog -> table -> page
 
-        if (this.pageNum <= this.pagesMap.size()) {
+        if (this.pagesMap.size() >= pageNum) { 
             this.evictPage(); 
         }
 
         this.pagesMap.put(pid, newPage);
         return newPage;
         
-
         // 2. check if the page is locked
         // 2.1. if page is locked, block the current request until the page is unlocked
         // 2.2. once page is free, acquire lock for page
