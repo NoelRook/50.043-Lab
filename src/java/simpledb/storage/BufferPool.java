@@ -1,15 +1,12 @@
 package simpledb.storage;
 
-import simpledb.common.Database;
-import simpledb.common.Permissions;
+import java.io.*;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import simpledb.common.DbException;
-import simpledb.common.DeadlockException;
+import simpledb.common.Permissions;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
-
-import java.io.*;
-
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -33,6 +30,10 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
+    private int pageNum;
+    //something is here to store pages
+    private Map<PageId, Page> pagesMap; // cache recently used pages into pagesMap
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -40,6 +41,8 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        this.pageNum = numPages;
+        this.pagesMap = new ConcurrentHashMap<>();
     }
     
     public static int getPageSize() {
@@ -74,6 +77,10 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
+        // retrieves page based on page id
+        // how can i acquire lock here
+        // 
+
         return null;
     }
 

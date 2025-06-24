@@ -1,27 +1,30 @@
 package simpledb.common;
 
+import simpledb.storage.DbFile;
+
+
 class Table{
-    private DbFile;
-    private name;
-    private pkeyField;
+    private DbFile file;
+    private String name;
+    private String pkey;
 
     Table(DbFile file, String name, String pkeyField){
-        this.DbFile = file;
+        this.file = file;
         this.name = name;
-        this.pkeyField = pkeyField;
+        this.pkey = pkeyField;
     }
 
     //getters
-    getName(){
+    public String getName(){
         return this.name;
     }
 
-    getDbFile(){
-        return this.Dbfile;
+    public DbFile getDbFile(){
+        return this.file;
     }
     
-    getPrimaryKey(){
-        return this.pkeyField;
+    public String getPrimaryKey(){
+        return this.pkey;
     }
 
 
