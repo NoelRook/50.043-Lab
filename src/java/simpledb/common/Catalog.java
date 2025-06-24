@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import simpledb.storage.DbFile;
 import simpledb.storage.HeapFile;
 import simpledb.storage.TupleDesc;
+import simpledb.common.Table;
 
 /**
  * The Catalog keeps track of all available tables in the database and their
@@ -21,8 +22,8 @@ import simpledb.storage.TupleDesc;
  */
 public class Catalog {
 
-    private Map<Integer, DbFile> files; // Maps table ID to DbFile
-
+    private Map<Integer, Table> files; // Maps table ID to DbFile
+    
     /**
      * Constructor.
      * Creates a new, empty catalog.
@@ -51,9 +52,10 @@ public class Catalog {
             // If a table with the same ID exists, replace it
             files.remove(tableId);
         }
-        // note name is not used in this implementation, but could be used for future enhancements
+        this.files.entrySet().removeIf(entry-> entry.getValue().getName() == name);
         // If a table with the same name exists, replace it
-        files.put(tableId, file);
+        Table newTable = new Table(file, name, pkeyField);
+        this.files.put(tableId,newTable);
     }
 
     public void addTable(DbFile file, String name) {
@@ -77,10 +79,13 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        if (files.containsKey(tableId)) { // something wrong here, tableId is not defined
-            // If a table with the same ID exists, replace it
-            files.remove(tableId); // This line is incorrect, it should not be here
+        for(Table t: this.files.entrySet()){
+            if(t.getName().equals(name)){
+                return t.getDatabaseFile().getId();
+            }   
         }
+
+        throw new NoSuchElementException("there is no element with this name in the catalog")
     }
 
     /**
@@ -90,8 +95,13 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
-        // some code goes here
-        return null;
+        // some code goes 
+        if(this.files.containsKey(tableid)){
+            return this.files.get(tableid).getDatabaseFile().getTupleDesc();
+        }
+        else{
+            throw new NoSuchElementException("there is no such file");
+        }
     }
 
     /**
@@ -102,6 +112,7 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
         // some code goes here
+        
         return null;
     }
 
