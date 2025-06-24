@@ -1,8 +1,8 @@
 package simpledb.storage;
 
 import java.io.*;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Permissions;
 import simpledb.transaction.TransactionAbortedException;
@@ -32,7 +32,7 @@ public class BufferPool {
 
     private int pageNum;
     //something is here to store pages
-    private Map<PageId, Page> pagesMap; // cache recently used pages into pagesMap
+    private ConcurrentHashMap<PageId, Page> pagesMap; // cache recently used pages into pagesMap
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -42,7 +42,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         this.pageNum = numPages;
-        this.pagesMap = new ConcurrentHashMap<>();
+        this.pagesMap = new ConcurrentHashMap<>(numPages);
     }
     
     public static int getPageSize() {
@@ -77,11 +77,30 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        // retrieves page based on page id
-        // how can i acquire lock here
-        // 
+        // 1. search for page based on page id with associated permissions from bufferpool
+        if (this.pagesMap.containsKey(pid)) { // if there is a hit, return the page to the requester
+            // do something about the key here
+            Page page = this.pagesMap.get(pid);
+            this.pagesMap.remove(pid); // some logic to implement replacement policy must be placed here
+            this.pagesMap.put(pid, page);
+            return page;
+        }
+        // if page is not in the bufferpool
+        Page newPage = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid); // retrieve from the catalog -> table -> page
 
-        return null;
+        if (this.pageNum <= this.pagesMap.size()) {
+            this.evictPage(); 
+        }
+
+        this.pagesMap.put(pid, newPage);
+        return newPage;
+        
+
+        // 2. check if the page is locked
+        // 2.1. if page is locked, block the current request until the page is unlocked
+        // 2.2. once page is free, acquire lock for page
+    
+        // need to choose and implement eviction policy
     }
 
     /**
