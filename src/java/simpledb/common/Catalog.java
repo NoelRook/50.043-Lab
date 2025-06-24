@@ -79,13 +79,13 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        for(Table t: this.files.entrySet()){
-            if(t.getName().equals(name)){
-                return t.getDatabaseFile().getId();
-            }   
+        for(Map.Entry<Integer, Table> entry : this.files.entrySet()){
+            if (entry.getValue().getName().equals(name)) {
+            return entry.getKey();
+        } 
         }
 
-        throw new NoSuchElementException("there is no element with this name in the catalog")
+        throw new NoSuchElementException("there is no element with this name in the catalog");
     }
 
     /**
@@ -97,7 +97,7 @@ public class Catalog {
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes 
         if(this.files.containsKey(tableid)){
-            return this.files.get(tableid).getDatabaseFile().getTupleDesc();
+            return this.files.get(tableid).getDbFile().getTupleDesc();
         }
         else{
             throw new NoSuchElementException("there is no such file");
@@ -111,29 +111,36 @@ public class Catalog {
      *     function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
-        // some code goes here
-        
-        return null;
+        if (!files.containsKey(tableid)) {
+            throw new NoSuchElementException("Table ID " + tableid + " not found.");
+        }
+        return files.get(tableid).getDbFile();
     }
 
     public String getPrimaryKey(int tableid) {
         // some code goes here
-        return null;
+        if (!files.containsKey(tableid)) {
+            throw new NoSuchElementException("Table ID " + tableid + " not found.");
+        }
+        return files.get(tableid).getPrimaryKey();
     }
 
     public Iterator<Integer> tableIdIterator() {
-        // some code goes here
-        return null;
+        return files.keySet().iterator();
     }
 
     public String getTableName(int id) {
         // some code goes here
-        return null;
+        if (!files.containsKey(id)) {
+            throw new NoSuchElementException("Table ID " + id + " not found.");
+        }
+        return files.get(id).getName();
     }
     
+        
     /** Delete all tables from the catalog */
     public void clear() {
-        // some code goes here
+        files.clear();
     }
     
     /**
