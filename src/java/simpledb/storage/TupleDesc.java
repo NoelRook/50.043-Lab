@@ -1,9 +1,8 @@
 package simpledb.storage;
 
-import simpledb.common.Type;
-
 import java.io.Serializable;
 import java.util.*;
+import simpledb.common.Type;
 /**
  * TupleDesc describes the schema of a tuple.
  */
@@ -157,7 +156,7 @@ public class TupleDesc implements Serializable {
     public int fieldNameToIndex(String name) throws NoSuchElementException {
         // some code goes here
         for(int i = 0; i< this.numFields(); i++){
-            if(getFieldName(i) == name){
+            if(getFieldName(i).equals(name)){
                 return i;
             }
         }

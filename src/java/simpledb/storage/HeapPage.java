@@ -71,9 +71,10 @@ public class HeapPage implements Page {
     /** Retrieve the number of tuples on this page.
         @return the number of tuples on this page
     */
-    private int getNumTuples() {      
-        int tuple_size = td.getSize();
-        return (int) Math.floor((BufferPool.getPageSize()*8) / (tuple_size * 8 + 1));
+    private int getNumTuples() {        
+        // some code goes here
+        return (int) Math.floor((BufferPool.getPageSize() * 8) / (td.getSize() * 8 + 1));
+
     }
 
     /**
@@ -81,8 +82,10 @@ public class HeapPage implements Page {
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {        
+        
         // some code goes here
-        return (int) Math.ceil(this.getNumTuples() / 8);          
+        return (int) Math.ceil(getNumTuples() / 8.0);
+                 
     }
     
     /** Return a view of this page before it was modified
@@ -114,7 +117,8 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-        return this.pid;
+    // some code goes here
+    return pid;
     }
 
     /**
@@ -283,27 +287,22 @@ public class HeapPage implements Page {
      * Returns the number of empty slots on this page.
      */
     public int getNumEmptySlots() {
-        int emptySlots = 0;
-        for(int i=0; i< this.numSlots; i++){
-            if(!(isSlotUsed(i))){
-                emptySlots++;
+        int count = 0;
+        for (int i = 0; i < numSlots; i++) {
+            if (!isSlotUsed(i)) {
+                count++;
             }
         }
-        return emptySlots;
+        return count;
     }
 
     /**
      * Returns true if associated slot on this page is filled.
      */
     public boolean isSlotUsed(int i) {
-        // Calculate which byte in the header contains the bit for this slot
-        int headerByte = i / 8;
-        // Calculate which bit within that byte corresponds to this slot
-        int bitPosition = i % 8;
-        // Extract the relevant byte from the header
-        byte headerByteValue = header[headerByte];
-        // Check if the bit is set (1 means used, 0 means empty)
-        return (headerByteValue & (1 << bitPosition)) != 0;
+        int byteIndex = i / 8;
+        int bitIndex = i % 8;
+        return (header[byteIndex] & (1 << bitIndex)) != 0;
     }
 
     /**
@@ -320,13 +319,13 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        ArrayList<Tuple> tupleList = new ArrayList<>();
+        List<Tuple> usedTuples = new ArrayList<>();
         for (int i = 0; i < numSlots; i++) {
             if (isSlotUsed(i)) {
-                tupleList.add(tuples[i]);
+                usedTuples.add(tuples[i]);
             }
         }
-        return tupleList.iterator();
+        return usedTuples.iterator();
     }
 
 }

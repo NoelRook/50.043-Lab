@@ -123,8 +123,7 @@ public class SeqScan implements OpIterator {
             originalString[i] = this.getAlias() +"."+original.getFieldName(i);
         }
 
-        TupleDesc finaTupleDesc = new TupleDesc(originalType, originalString);
-        return finaTupleDesc;
+        return new TupleDesc(originalType, originalString);
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
