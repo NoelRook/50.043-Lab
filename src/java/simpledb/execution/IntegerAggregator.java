@@ -62,8 +62,7 @@ public class IntegerAggregator implements Aggregator {
         Field groupField = (gbfield == NO_GROUPING) ? null : tup.getField(gbfield);
         IntField aggField = (IntField) tup.getField(afield);
         int value = aggField.getValue();
-
-        // Initialize if not present
+        
         if (!aggregateValues.containsKey(groupField)) {
             switch (what) {
                 case MIN: 
