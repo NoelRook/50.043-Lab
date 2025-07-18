@@ -244,19 +244,7 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
-        //this.pagesMap.remove(pid);
-        Page page = pagesMap.get(pid);
-        if (page == null) {
-            return; // page not in buffer pool
-        }
-        
-        // Only write to disk if page is dirty
-        if (page.isDirty() != null) {
-            // Get the DbFile for this page
-            DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
-            dbFile.writePage(page);
-            page.markDirty(false, null); // Page is now clean
-        }
+        this.pagesMap.remove(pid);
     }
 
     /** Write all pages of the specified transaction to disk.

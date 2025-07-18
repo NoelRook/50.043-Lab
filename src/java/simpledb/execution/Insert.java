@@ -1,7 +1,5 @@
 package simpledb.execution;
 
-import java.io.IOException;
-
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Type;
@@ -69,9 +67,8 @@ public class Insert extends Operator {
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
-        child.open();
         super.open();
-        
+        child.open();
     }
 
     public void close() {
@@ -106,32 +103,20 @@ public class Insert extends Operator {
         }
 
         int count = 0;
-        BufferPool bufferPool = Database.getBufferPool();
-
         while (child.hasNext()){
             Tuple t= child.next();
             try{
-                bufferPool.insertTuple(transactionId, tableId, t);
+                Database.getBufferPool().insertTuple(transactionId, tableId, t);
                 count++;
             } catch (Exception e){
-                throw new DbException("Failed to insert tuple "+ e.getMessage());
+                throw new DbException("Failed to insert tuple "+ e.toString());
             }
         }
-        try {
-            bufferPool.flushAllPages();
-        } catch (IOException e) {
-            throw new DbException("Failed to flush pages" +e.toString());
-        }
-
         //create and return the result tuple
         Tuple result = new Tuple(tupleDesc);
         result.setField(0, new IntField(count));
         hasInserted = true;
         return result;
-
-
-
-
     }
 
     @Override
