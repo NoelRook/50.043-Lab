@@ -112,7 +112,14 @@ public class BufferPool {
             
         } catch (Exception e) {
             // If any error occurs, release the lock and re-throw
-            lockManager.releaseLock(tid, pid, perm);
+            try {
+                if (lockManager.holdsLock(tid, pid, perm)) {
+                    lockManager.releaseLock(tid, pid, perm);
+                }
+            } catch (Exception releaseException) {
+                // Log but don't override original exception
+                System.err.println("Error releasing lock during exception handling: " + releaseException.getMessage());
+            }
             if (e instanceof DbException) {
                 throw (DbException) e;
             } else if (e instanceof TransactionAbortedException) {
@@ -165,12 +172,12 @@ public class BufferPool {
      */
     public void transactionComplete(TransactionId tid, boolean commit) {
         // If committing, flush all dirty pages for this transaction
-
         try {
             if(commit){
-                flushPages(tid);
+                flushPages(tid); // flush all dirty pages for this transaction
             }
             else{
+                //restore all pages to their before image
                 Iterator<PageId> iter = pagesMap.keySet().iterator();
                 while (iter.hasNext()) {
                     PageId pid = iter.next();
@@ -219,10 +226,12 @@ public class BufferPool {
             lockManager.acquireLock(tid, pg.getId(), Permissions.READ_WRITE);
             
             pg.markDirty(true, tid);
-            
-            if (!this.pagesMap.containsKey(pg.getId()) && this.pagesMap.size() >= this.pageNum) {
-                this.evictPage();
+            synchronized (this) {
+                if (!this.pagesMap.containsKey(pg.getId()) && this.pagesMap.size() >= this.pageNum) {
+                    this.evictPage();
+                }
             }
+            
             
             // Update LRU cache
             this.pagesMap.remove(pg.getId());
@@ -255,9 +264,10 @@ public class BufferPool {
             lockManager.acquireLock(tid, pg.getId(), Permissions.READ_WRITE);
             
             pg.markDirty(true, tid);
-            
-            if (!this.pagesMap.containsKey(pg.getId()) && this.pagesMap.size() >= this.pageNum) {
-                this.evictPage();
+            synchronized (this) {
+                if (!this.pagesMap.containsKey(pg.getId()) && this.pagesMap.size() >= this.pageNum) {
+                    this.evictPage();
+                }
             }
             
             // Update LRU cache
@@ -273,7 +283,9 @@ public class BufferPool {
      */
     public synchronized void flushAllPages() throws IOException {
         for (Page p: this.pagesMap.values()) {
-            this.flushPage(p.getId());
+            if(p.isDirty() != null){
+                this.flushPage(p.getId());
+            }
         }
     }
 
@@ -295,7 +307,10 @@ public class BufferPool {
      */
     private synchronized void flushPage(PageId pid) throws IOException {
         Page page = this.pagesMap.get(pid);
+        TransactionId dirtyTid = page.isDirty();
         if (page != null && page.isDirty() != null) {
+            Database.getLogFile().logWrite(dirtyTid, page.getBeforeImage(), page);
+            Database.getLogFile().force();
             // Write the page to disk
             Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
             page.markDirty(false, null);

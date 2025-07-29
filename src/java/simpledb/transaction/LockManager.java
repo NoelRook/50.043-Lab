@@ -148,7 +148,6 @@ public class LockManager {
         grantLock(tid, pid, perm);
         notifyAll(); // Notify other waiting transactions
     }
-    
     /**
      * Gets the set of transactions that are blocking the requested lock
      */
