@@ -1,6 +1,5 @@
 package simpledb.storage;
 
-import java.io.*;
 import java.util.*;
 import simpledb.common.Database;
 import simpledb.common.DbException;

@@ -1,8 +1,7 @@
 package simpledb.storage;
 
 import java.io.*;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import simpledb.common.Database;
 import simpledb.common.DbException;
@@ -33,12 +32,9 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
-    private int pageNum;
-    //something is here to store pages
-    private ConcurrentHashMap<PageId, Page> pagesMap; // cache recently used pages into pagesMap
-    
-    // Add the lock manager
-    private LockManager lockManager;
+    private final int numPages;
+    private final ConcurrentHashMap<PageId, Page> pagesMap;
+    private final LockManager lockManager;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -47,9 +43,9 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
-        this.pageNum = numPages;
+        this.numPages = numPages;
         this.pagesMap = new ConcurrentHashMap<>(numPages);
-        this.lockManager = new LockManager(); // Initialize lock manager
+        this.lockManager = new LockManager();
     }
     
     public static int getPageSize() {
@@ -82,51 +78,28 @@ public class BufferPool {
      * @param perm the requested permissions on the page
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
-        throws TransactionAbortedException, DbException {
-        
-        // STEP 1: Acquire lock before accessing the page
+            throws TransactionAbortedException, DbException {
+        // some code goes here
+        // 1. Acquire lock
         lockManager.acquireLock(tid, pid, perm);
-        
-        try {
-            // STEP 2: Check if page is in buffer pool
-            if (this.pagesMap.containsKey(pid)) { 
-                // If there is a hit, return the page to the requester
-                Page page = this.pagesMap.get(pid);
-                // Update LRU order - remove and re-add to make it most recently used
-                this.pagesMap.remove(pid);
-                this.pagesMap.put(pid, page);
-                return page;
-            }
-            
-            // STEP 3: Page not in buffer pool, load from disk
-            Page newPage = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
 
-            // STEP 4: Check if buffer pool is full, evict if necessary
-            if (this.pagesMap.size() >= pageNum) { 
-                this.evictPage(); 
+        synchronized (this) {
+            // 2. Check if page is in buffer pool
+            if (pagesMap.containsKey(pid)) {
+                return pagesMap.get(pid);
             }
 
-            // STEP 5: Add new page to buffer pool
-            this.pagesMap.put(pid, newPage);
-            return newPage;
-            
-        } catch (Exception e) {
-            // If any error occurs, release the lock and re-throw
-            try {
-                if (lockManager.holdsLock(tid, pid, perm)) {
-                    lockManager.releaseLock(tid, pid, perm);
-                }
-            } catch (Exception releaseException) {
-                // Log but don't override original exception
-                System.err.println("Error releasing lock during exception handling: " + releaseException.getMessage());
+            // 3. If not, read from disk
+            Page page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+
+            // 4. If buffer is full, evict a page
+            if (pagesMap.size() >= numPages) {
+                evictPage();
             }
-            if (e instanceof DbException) {
-                throw (DbException) e;
-            } else if (e instanceof TransactionAbortedException) {
-                throw (TransactionAbortedException) e;
-            } else {
-                throw new DbException("Error retrieving page: " + e.getMessage());
-            }
+
+            // 5. Add to buffer pool
+            pagesMap.put(pid, page);
+            return page;
         }
     }
 
@@ -140,13 +113,10 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void unsafeReleasePage(TransactionId tid, PageId pid) {
-        // Release both read and write locks (if any)
-        if (lockManager.holdsLock(tid, pid, Permissions.READ_WRITE)) {
-            lockManager.releaseLock(tid, pid, Permissions.READ_WRITE);
-        }
-        if (lockManager.holdsLock(tid, pid, Permissions.READ_ONLY)) {
-            lockManager.releaseLock(tid, pid, Permissions.READ_ONLY);
-        }
+        // some code goes here
+        // not necessary for lab1|lab2
+        lockManager.releaseLock(tid, pid, Permissions.READ_WRITE);
+        lockManager.releaseLock(tid, pid, Permissions.READ_ONLY);
     }
 
     /**
@@ -155,11 +125,15 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      */
     public void transactionComplete(TransactionId tid) {
-        this.transactionComplete(tid,true);
+        // some code goes here
+        // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
+        // some code goes here
+        // not necessary for lab1|lab2
         return lockManager.holdsLock(tid, p);
     }
 
@@ -171,33 +145,28 @@ public class BufferPool {
      * @param commit a flag indicating whether we should commit or abort
      */
     public void transactionComplete(TransactionId tid, boolean commit) {
-        // If committing, flush all dirty pages for this transaction
+        // some code goes here
+        // not necessary for lab1|lab2
         try {
-            if(commit){
-                flushPages(tid); // flush all dirty pages for this transaction
-            }
-            else{
-                //restore all pages to their before image
-                Iterator<PageId> iter = pagesMap.keySet().iterator();
-                while (iter.hasNext()) {
-                    PageId pid = iter.next();
-                    Page page = pagesMap.get(pid);
-                    if (page.isDirty() != null && page.isDirty().equals(tid)) {
-                        Page tempPage = page.getBeforeImage();
-                        pagesMap.remove(pid);
-                        pagesMap.put(pid, tempPage);
+            if (commit) {
+                flushPages(tid);
+            } else {
+                // Abort: restore pages to before image
+                synchronized (this) {
+                    for (PageId pid : new HashSet<>(pagesMap.keySet())) {
+                        Page page = pagesMap.get(pid);
+                        if (page.isDirty() != null && page.isDirty().equals(tid)) {
+                            Page beforeImage = page.getBeforeImage();
+                            pagesMap.put(pid, beforeImage);
+                        }
                     }
                 }
             }
-
-            
-        } catch (Exception e) {
-            System.err.println("Error flushing pages for transaction " + tid + ": " + e.getMessage());
-
+        } catch (IOException e) {
+            System.err.println("Error during transaction completion: " + e.getMessage());
+        } finally {
+            lockManager.releaseAllLocks(tid);
         }
-        
-        // Always release all locks held by the transaction
-        lockManager.releaseAllLocks(tid);
     }
 
     /**
@@ -217,25 +186,22 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
-        
-        DbFile curTable = Database.getCatalog().getDatabaseFile(tableId);
-        List<Page> pageArray = curTable.insertTuple(tid, t);
-        
-        for (Page pg : pageArray) {
-            // Acquire write lock for the page before modifying
-            lockManager.acquireLock(tid, pg.getId(), Permissions.READ_WRITE);
-            
-            pg.markDirty(true, tid);
-            synchronized (this) {
-                if (!this.pagesMap.containsKey(pg.getId()) && this.pagesMap.size() >= this.pageNum) {
-                    this.evictPage();
+        // some code goes here
+        // not necessary for lab1
+        DbFile file = Database.getCatalog().getDatabaseFile(tableId);
+        List<Page> dirtyPages = file.insertTuple(tid, t);
+
+        synchronized (this) {
+            for (Page page : dirtyPages) {
+                page.markDirty(true, tid);
+                // Acquire write lock
+                lockManager.acquireLock(tid, page.getId(), Permissions.READ_WRITE);
+
+                if (pagesMap.size() >= numPages && !pagesMap.containsKey(page.getId())) {
+                    evictPage();
                 }
+                pagesMap.put(page.getId(), page);
             }
-            
-            
-            // Update LRU cache
-            this.pagesMap.remove(pg.getId());
-            this.pagesMap.put(pg.getId(), pg);
         }
     }
 
@@ -254,26 +220,23 @@ public class BufferPool {
      */
     public void deleteTuple(TransactionId tid, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
-        
-        // Get table id
-        DbFile dbFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
-        List<Page> pageArray = dbFile.deleteTuple(tid, t);
-        
-        for (Page pg : pageArray) {
-            // Acquire write lock for the page before modifying
-            lockManager.acquireLock(tid, pg.getId(), Permissions.READ_WRITE);
-            
-            pg.markDirty(true, tid);
-            synchronized (this) {
-                if (!this.pagesMap.containsKey(pg.getId()) && this.pagesMap.size() >= this.pageNum) {
-                    this.evictPage();
+        // some code goes here
+        // not necessary for lab1
+        DbFile file = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        List<Page> dirtyPages = file.deleteTuple(tid, t);
+
+        synchronized (this) {
+            for (Page page : dirtyPages) {
+                page.markDirty(true, tid);
+                // Acquire write lock
+                lockManager.acquireLock(tid, page.getId(), Permissions.READ_WRITE);
+
+                if (pagesMap.size() >= numPages && !pagesMap.containsKey(page.getId())) {
+                    evictPage();
                 }
+                pagesMap.put(page.getId(), page);
             }
-            
-            // Update LRU cache
-            this.pagesMap.remove(pg.getId());
-            this.pagesMap.put(pg.getId(), pg);
-        }   
+        }
     }
 
     /**
@@ -282,10 +245,10 @@ public class BufferPool {
      *     break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        for (Page p: this.pagesMap.values()) {
-            if(p.isDirty() != null){
-                this.flushPage(p.getId());
-            }
+        // some code goes here
+        // not necessary for lab1
+        for (PageId pid : pagesMap.keySet()) {
+            flushPage(pid);
         }
     }
 
@@ -298,7 +261,9 @@ public class BufferPool {
         are removed from the cache so they can be reused safely
     */
     public synchronized void discardPage(PageId pid) {
-        this.pagesMap.remove(pid);
+        // some code goes here
+        // not necessary for lab1
+        pagesMap.remove(pid);
     }
 
     /**
@@ -306,12 +271,10 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
-        Page page = this.pagesMap.get(pid);
-        TransactionId dirtyTid = page.isDirty();
+        // some code goes here
+        // not necessary for lab1
+        Page page = pagesMap.get(pid);
         if (page != null && page.isDirty() != null) {
-            Database.getLogFile().logWrite(dirtyTid, page.getBeforeImage(), page);
-            Database.getLogFile().force();
-            // Write the page to disk
             Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
             page.markDirty(false, null);
         }
@@ -320,9 +283,12 @@ public class BufferPool {
     /** Write all pages of the specified transaction to disk.
      */
     public synchronized void flushPages(TransactionId tid) throws IOException {
-        for (Page page : this.pagesMap.values()) {
+        // some code goes here
+        // not necessary for lab1|lab2
+        for (PageId pid : pagesMap.keySet()) {
+            Page page = pagesMap.get(pid);
             if (page.isDirty() != null && page.isDirty().equals(tid)) {
-                this.flushPage(page.getId());
+                flushPage(pid);
             }
         }
     }
@@ -332,28 +298,30 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        // Find a page that is not dirty (to avoid writing dirty pages in NO STEAL mode)
-        PageId pidToEvict = null;
-        
-        for (PageId pid : this.pagesMap.keySet()) {
-            Page page = this.pagesMap.get(pid);
-            if (page.isDirty() == null) { // Page is not dirty
-                pidToEvict = pid;
+        // some code goes here
+        // not necessary for lab1
+        Iterator<PageId> iter = this.pagesMap.keySet().iterator();
+
+        Page lruPage = null;
+
+        while (iter.hasNext()) {
+            PageId pid = iter.next();
+            Page page = pagesMap.get(pid);
+            if (page.isDirty() == null) {
+                lruPage = page;
                 break;
             }
         }
-        
-        // If no clean page found, evict the first page (assuming STEAL policy)
-        if (pidToEvict == null) {
-            pidToEvict = this.pagesMap.keySet().iterator().next();
+
+        if (lruPage == null) {
+            throw new DbException("There are no pages to evict.");
         }
 
         try {
-            this.flushPage(pidToEvict);
+            this.flushPage(lruPage.getId());
         } catch (IOException e) {
             throw new DbException("Page could not be flushed.");
         }
-        
-        this.pagesMap.remove(pidToEvict);
+        this.pagesMap.remove(lruPage.getId());
     }
 }

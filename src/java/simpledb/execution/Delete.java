@@ -1,5 +1,6 @@
 package simpledb.execution;
 
+import java.io.IOException;
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Type;
@@ -10,17 +11,19 @@ import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
-import java.io.IOException;
-
 /**
  * The delete operator. Delete reads tuples from its child operator and removes
  * them from the table they belong to.
  */
 public class Delete extends Operator {
-
     private static final long serialVersionUID = 1L;
 
-    /*
+    private TransactionId tid;
+    private OpIterator child;
+    private TupleDesc td;
+    private boolean fetched;
+
+    /**
      * Constructor specifying the transaction that this delete belongs to as
      * well as the child to read from.
      * 
@@ -29,48 +32,36 @@ public class Delete extends Operator {
      * @param child
      *            The child operator from which to read tuples for deletion
      */
-
-
-    private final TransactionId transactionId;
-    private OpIterator child;
-    private boolean hasDeleted;
-    private TupleDesc tupleDesc;
-
     public Delete(TransactionId t, OpIterator child) {
-        // some code goes here
-        this.transactionId = t;
+        this.tid = t;
         this.child = child;
-        this.hasDeleted = false;
-
-        //create output tuple descriptor (single INT field)
-        Type[] typeAr = new Type[]{Type.INT_TYPE};
-        String[] fieldAr = new String[]{"deleted_count"};
-        this.tupleDesc = new TupleDesc(typeAr, fieldAr);
+        this.td = new TupleDesc(new Type[]{Type.INT_TYPE});
     }
 
     public TupleDesc getTupleDesc() {
-        // some code goes here
-        return this.tupleDesc;
+        return this.td;
     }
 
+    @Override
     public void open() throws DbException, TransactionAbortedException {
+        this.child.open();
         super.open();
-        child.open();
     }
 
+    @Override
     public void close() {
-        // some code goes here
         super.close();
-        child.close();
+        this.child.close();
+        this.fetched = false;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // some code goes here
-        child.rewind();
-        hasDeleted = false;
+        this.child.rewind();
+        this.close();
+        this.open();
     }
 
-    /*
+    /**
      * Deletes tuples as they are read from the child operator. Deletes are
      * processed via the buffer pool (which can be accessed via the
      * Database.getBufferPool() method.
@@ -80,42 +71,32 @@ public class Delete extends Operator {
      * @see BufferPool#deleteTuple
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // some code goes here
-        if (hasDeleted){
-            return null; //only return one tuple with the count
-        }
+        if (this.fetched) return null;
 
-        int count = 0;
-        while (child.hasNext()){
-            Tuple t= child.next();
-            try{
-                Database.getBufferPool().deleteTuple(transactionId, t);
-                count++;
-            } catch(Exception e){
-                throw new DbException("Failed to delete tuple "+ e.toString());
+        int deleteCount = 0;
+        this.fetched = true;
+
+        while (this.child.hasNext()) {
+            try {
+                Database.getBufferPool().deleteTuple(this.tid, this.child.next());
+                deleteCount++;
+            } catch (IOException e) {
+                throw new DbException("Deletion failed.");
             }
         }
 
-        //create and return result tuple
-        Tuple result = new Tuple(tupleDesc);
-        result.setField(0, new IntField(count));
-        hasDeleted = true;
-        return result;
+        Tuple deleteResults = new Tuple(this.td);
+        deleteResults.setField(0, new IntField(deleteCount));
+        return deleteResults;
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // some code goes here
-        return new OpIterator[]{child};
+        return new OpIterator[] { this.child };
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // some code goes here
-        if (children.length!=1){
-            throw new IllegalArgumentException("Expect 1 child operator");
-        }
         this.child = children[0];
     }
-
 }

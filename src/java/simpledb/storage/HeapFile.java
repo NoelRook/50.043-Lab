@@ -80,16 +80,16 @@ public class HeapFile implements DbFile {
     // Create a byte buffer to hold the page data
     byte[] pageData = new byte[pageSize];
     
-    try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
-        // Seek to the correct offset
-        raf.seek(offset);
-        // Read the page data
-        raf.read(pageData);
-        // Create and return the HeapPage
-        return new HeapPage((HeapPageId) pid, pageData);
-    } catch (IOException e) {
-        throw new IllegalArgumentException("Could not read page with id " + pid);
-    }
+        try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
+            // Seek to the correct offset
+            raf.seek(offset);
+            // Read the page data
+            raf.read(pageData);
+            // Create and return the HeapPage
+            return new HeapPage((HeapPageId) pid, pageData);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Could not read page with id " + pid);
+        }
     }   
 
     // see DbFile.java for javadocs
@@ -145,14 +145,19 @@ public class HeapFile implements DbFile {
             TransactionAbortedException {
         // some code goes here
 
-        PageId pageId = t.getRecordId().getPageId();
-        HeapPage curPage = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
-        curPage.deleteTuple(t);
-
-        ArrayList<Page> res = new ArrayList<>();
-        res.add(curPage);
-        return res;
-        // not necessary for lab1
+        PageId pid = t.getRecordId().getPageId();
+        ArrayList<Page> affectedPages = new ArrayList<>();
+        for (int i = 0; i < numPages(); i++) {
+            if (i == pid.getPageNumber()) {
+                HeapPage affectedPage = (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+                affectedPage.deleteTuple(t);
+                affectedPages.add(affectedPage);
+            }
+        }
+        if (affectedPages.isEmpty()) {
+            throw new DbException("Tuple " + t + " is not in this table.");
+        }
+        return affectedPages;
     }
 
     // see DbFile.java for javadocs
