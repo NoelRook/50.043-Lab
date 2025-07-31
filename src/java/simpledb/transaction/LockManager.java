@@ -72,13 +72,13 @@ public class LockManager {
         final TransactionId tid;
         final PageId pid;
         final Permissions perm;
-        final long timestamp;
+        final long time;
 
         LockRequest(TransactionId tid, PageId pid, Permissions perm) {
             this.tid = tid;
             this.pid = pid;
             this.perm = perm;
-            this.timestamp = System.currentTimeMillis();
+            this.time = System.currentTimeMillis();
         }
     }
 
@@ -125,13 +125,17 @@ public class LockManager {
         } catch (InterruptedException e) {
             cleanupWaitingTransaction(tid, pid);
             Thread.currentThread().interrupt();
-            throw new TransactionAbortedException("");
+            throw new TransactionAbortedException(
+                            String.format("Transaction %s aborted due to deadlock while requesting %s lock on page %s",
+                                tid, perm == Permissions.READ_ONLY ? "shared" : "exclusive", pid));
         }
 
         // Optional: Deadlock check again during long waits
         if (hasCycle()) {
             cleanupWaitingTransaction(tid, pid);
-            throw new TransactionAbortedException("");
+            throw new TransactionAbortedException(
+                            String.format("Transaction %s aborted due to deadlock while requesting %s lock on page %s",
+                                tid, perm == Permissions.READ_ONLY ? "shared" : "exclusive", pid));
         }
     }
 
@@ -376,27 +380,6 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
         }
 
         notifyAll(); // Notify waiting transactions
-    }
-
-    /**
-     * Gets debug information about current lock state
-     */
-    public synchronized String getDebugInfo() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== Lock Manager Debug Info ===\n");
-        sb.append("Page Locks:\n");
-        for (Map.Entry<PageId, Set<Lock>> entry : pageLocks.entrySet()) {
-            sb.append(String.format("  Page %s: %s\n", entry.getKey(), entry.getValue()));
-        }
-        sb.append("Transaction Locks:\n");
-        for (Map.Entry<TransactionId, Set<Lock>> entry : transactionLocks.entrySet()) {
-            sb.append(String.format("  Transaction %s: %s\n", entry.getKey(), entry.getValue()));
-        }
-        sb.append("Wait-For Graph:\n");
-        for (Map.Entry<TransactionId, Set<TransactionId>> entry : waitForGraph.entrySet()) {
-            sb.append(String.format("  %s waits for: %s\n", entry.getKey(), entry.getValue()));
-        }
-        return sb.toString();
     }
 }
  
