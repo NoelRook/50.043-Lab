@@ -81,7 +81,7 @@ public class BufferPool {
             throws TransactionAbortedException, DbException {
         // some code goes here
         // 1. Acquire lock
-        lockManager.acquireLock(tid, pid, perm);
+        lockManager.getLock(tid, pid, perm);
 
         synchronized (this) {
             // 2. Check if page is in buffer pool
@@ -131,10 +131,10 @@ public class BufferPool {
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
-    public boolean holdsLock(TransactionId tid, PageId p) {
+    public boolean hasLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return lockManager.holdsLock(tid, p);
+        return lockManager.hasLock(tid, p);
     }
 
     /**
@@ -195,7 +195,7 @@ public class BufferPool {
             for (Page page : dirtyPages) {
                 page.markDirty(true, tid);
                 // Acquire write lock
-                lockManager.acquireLock(tid, page.getId(), Permissions.READ_WRITE);
+                lockManager.getLock(tid, page.getId(), Permissions.READ_WRITE);
 
                 if (pagesMap.size() >= numPages && !pagesMap.containsKey(page.getId())) {
                     evictPage();
@@ -229,7 +229,7 @@ public class BufferPool {
             for (Page page : dirtyPages) {
                 page.markDirty(true, tid);
                 // Acquire write lock
-                lockManager.acquireLock(tid, page.getId(), Permissions.READ_WRITE);
+                lockManager.getLock(tid, page.getId(), Permissions.READ_WRITE);
 
                 if (pagesMap.size() >= numPages && !pagesMap.containsKey(page.getId())) {
                     evictPage();

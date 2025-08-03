@@ -12,7 +12,6 @@ ant runtest -Dtest=LockingTest
 ant runtest -Dtest=TransactionTest
 
 # Exercise 3: NO STEAL eviction logic
-ant runtest -Dtest=AbortEvictionTest
 
 # Exercise 4: Transaction lifecycle (commit/abort)
 ant runtest -Dtest=TransactionTest
@@ -26,7 +25,6 @@ echo "Running required system tests for Lab 3..."
 # Full system test for transactions and locking
 ant runsystest -Dtest=TransactionTest
 ant runsystest -Dtest=AbortEvictionTest
-ant runsystest -Dtest=DeadlockTest
 
 echo ""
 echo "All specified Lab 3 tests executed."

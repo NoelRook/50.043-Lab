@@ -21,13 +21,13 @@ public class LockManager {
     private final ConcurrentHashMap<PageId, Queue<LockRequest>> waitingQueue;
 
     // Wait-for graph: Maps transaction to set of transactions it's waiting for
-    private final ConcurrentHashMap<TransactionId, Set<TransactionId>> waitForGraph;
+    private final ConcurrentHashMap<TransactionId, Set<TransactionId>> graph;
 
     public LockManager() {
         this.pageLocks = new ConcurrentHashMap<>();
         this.transactionLocks = new ConcurrentHashMap<>();
         this.waitingQueue = new ConcurrentHashMap<>();
-        this.waitForGraph = new ConcurrentHashMap<>();
+        this.graph = new ConcurrentHashMap<>();
     }
 
     /**
@@ -72,13 +72,11 @@ public class LockManager {
         final TransactionId tid;
         final PageId pid;
         final Permissions perm;
-        final long time;
 
         LockRequest(TransactionId tid, PageId pid, Permissions perm) {
             this.tid = tid;
             this.pid = pid;
             this.perm = perm;
-            this.time = System.currentTimeMillis();
         }
     }
 
@@ -91,12 +89,12 @@ public class LockManager {
      * @param perm Permission type (READ_ONLY or READ_WRITE)
      * @throws TransactionAbortedException if deadlock is detected
      */
-    public synchronized void acquireLock(TransactionId tid, PageId pid, Permissions perm) 
+    public synchronized void getLock(TransactionId tid, PageId pid, Permissions perm) 
     throws TransactionAbortedException{
 
     // If already holds the needed or stronger lock, do nothing
-    if (holdsLock(tid, pid, perm) || 
-        (perm == Permissions.READ_ONLY && holdsLock(tid, pid, Permissions.READ_WRITE))) {
+    if (hasLock(tid, pid, perm) || 
+        (perm == Permissions.READ_ONLY && hasLock(tid, pid, Permissions.READ_WRITE))) {
         return;
     }
 
@@ -108,10 +106,10 @@ public class LockManager {
 
     // Cannot grant lock right now — collect blocking TIDs and check for deadlock
     Set<TransactionId> blockingTransactions = getBlockingTransactions(tid, pid, perm);
-    waitForGraph.put(tid, blockingTransactions);
+    graph.put(tid, blockingTransactions);
 
-    if (hasCycle()) {
-        waitForGraph.remove(tid);
+    if (hasCycle()) { // remove transaction if has cycle
+        graph.remove(tid);
         throw new TransactionAbortedException("");
     }
 
@@ -130,7 +128,6 @@ public class LockManager {
                                 tid, perm == Permissions.READ_ONLY ? "shared" : "exclusive", pid));
         }
 
-        // Optional: Deadlock check again during long waits
         if (hasCycle()) {
             cleanupWaitingTransaction(tid, pid);
             throw new TransactionAbortedException(
@@ -138,7 +135,6 @@ public class LockManager {
                                 tid, perm == Permissions.READ_ONLY ? "shared" : "exclusive", pid));
         }
     }
-
     // Lock can now be granted
     cleanupWaitingTransaction(tid, pid);
     grantLock(tid, pid, perm);
@@ -187,7 +183,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
         Set<TransactionId> visited = new HashSet<>();
         Set<TransactionId> recursionStack = new HashSet<>();
 
-        for (TransactionId tid : waitForGraph.keySet()) {
+        for (TransactionId tid : graph.keySet()) {
             if (!visited.contains(tid)) {
                 if (hasCycleDFS(tid, visited, recursionStack)) {
                     return true;
@@ -205,7 +201,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
         visited.add(tid);
         recursionStack.add(tid);
 
-        Set<TransactionId> neighbors = waitForGraph.get(tid);
+        Set<TransactionId> neighbors = graph.get(tid);
         if (neighbors != null) {
             for (TransactionId neighbor : neighbors) {
                 if (!visited.contains(neighbor)) {
@@ -236,7 +232,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
         }
 
         // Remove from wait-for graph
-        waitForGraph.remove(tid);
+        graph.remove(tid);
     }
 
     /**
@@ -268,7 +264,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
      */
     private void grantLock(TransactionId tid, PageId pid, Permissions perm) {
         // If upgrading from read to write lock, remove the read lock first
-        if (perm == Permissions.READ_WRITE && holdsLock(tid, pid, Permissions.READ_ONLY)) {
+        if (perm == Permissions.READ_WRITE && hasLock(tid, pid, Permissions.READ_ONLY)) {
             releaseLock(tid, pid, Permissions.READ_ONLY);
         }
 
@@ -282,7 +278,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
      * Checks if a transaction holds a specific lock on a page
      * Note: A write lock implies read permissions
      */
-    public synchronized boolean holdsLock(TransactionId tid, PageId pid, Permissions perm) {
+    public synchronized boolean hasLock(TransactionId tid, PageId pid, Permissions perm) {
         Set<Lock> locks = transactionLocks.get(tid);
         if (locks == null) return false;
 
@@ -302,7 +298,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
     /**
      * Checks if a transaction holds any lock on a page
      */
-    public synchronized boolean holdsLock(TransactionId tid, PageId pid) {
+    public synchronized boolean hasLock(TransactionId tid, PageId pid) {
         Set<Lock> locks = transactionLocks.get(tid);
         if (locks == null) return false;
 
@@ -332,7 +328,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
         }
 
         // Update wait-for graph for transactions that might now be unblocked
-        updateWaitForGraph();
+        updategraph();
 
         notifyAll(); // Notify waiting transactions
     }
@@ -340,22 +336,22 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
     /**
      * Updates the wait-for graph after a lock is released
      */
-    private void updateWaitForGraph() {
+    private void updategraph() {
         // Recalculate wait-for relationships for all waiting transactions
-        Map<TransactionId, Set<TransactionId>> newWaitForGraph = new HashMap<>();
+        Map<TransactionId, Set<TransactionId>> newgraph = new HashMap<>();
 
         for (Map.Entry<PageId, Queue<LockRequest>> entry : waitingQueue.entrySet()) {
             PageId pid = entry.getKey();
             for (LockRequest request : entry.getValue()) {
                 Set<TransactionId> blocking = getBlockingTransactions(request.tid, pid, request.perm);
                 if (!blocking.isEmpty()) {
-                    newWaitForGraph.put(request.tid, blocking);
+                    newgraph.put(request.tid, blocking);
                 }
             }
         }
 
-        waitForGraph.clear();
-        waitForGraph.putAll(newWaitForGraph);
+        graph.clear();
+        graph.putAll(newgraph);
     }
 
     /**
@@ -372,7 +368,7 @@ private boolean isFirstInQueue(TransactionId tid, PageId pid) {
         }
 
         transactionLocks.remove(tid);
-        waitForGraph.remove(tid); // Clean up wait-for graph
+        graph.remove(tid); // Clean up wait-for graph
 
         // Remove from all waiting queues
         for (Queue<LockRequest> queue : waitingQueue.values()) {
