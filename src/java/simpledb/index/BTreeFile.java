@@ -733,6 +733,34 @@ public class BTreeFile implements DbFile {
         // Move some of the tuples from the sibling to the page so
 		// that the tuples are evenly distributed. Be sure to update
 		// the corresponding parent entry.
+		Iterator<Tuple> it;
+		if (isRightSibling) {
+			it = sibling.iterator();
+		} else {
+			it = sibling.reverseIterator();
+		}
+
+		if (it == null || !it.hasNext()) {
+			throw new DbException("Sibling is empty.");
+		}
+		int nTuples = (sibling.getNumTuples() - page.getNumTuples()) / 2;
+		Tuple tuple = null;
+
+		for (int i = 0; i < nTuples; ++i) {
+			if (!it.hasNext()) {
+				throw new DbException("No tuples left");
+			}
+			tuple = it.next();
+			sibling.deleteTuple(tuple);
+			page.insertTuple(tuple);
+		}
+		
+		if (tuple == null) {
+			throw new DbException("No tuples left");
+		}
+		Field idx = tuple.getField(keyField);
+		entry.setKey(idx);
+		parent.updateEntry(entry);
 	}
 
 	/**
@@ -812,6 +840,34 @@ public class BTreeFile implements DbFile {
 		// that the entries are evenly distributed. Be sure to update
 		// the corresponding parent entry. Be sure to update the parent
 		// pointers of all children in the entries that were moved.
+		// Calculate how many entries to move to balance the pages
+		// Step 1: Get the last entry from left sibling
+		BTreeEntry lastEntry = null;
+		Iterator<BTreeEntry> reverseIt = leftSibling.reverseIterator();
+		if (reverseIt.hasNext()) {
+			lastEntry = reverseIt.next();
+		}
+		
+		// Step 2: Remove it from left sibling
+		leftSibling.deleteKeyAndRightChild(lastEntry);
+		
+		// Step 3: Create new entry with parent's key and appropriate child pointers
+		Field oldParentKey = parentEntry.getKey();
+		BTreePageId leftChild = lastEntry.getRightChild();
+		BTreePageId rightChild = page.iterator().hasNext() ? page.iterator().next().getLeftChild() : null;
+		
+		BTreeEntry newEntry = new BTreeEntry(oldParentKey, leftChild, rightChild);
+		
+		// Step 4: Insert the new entry into current page
+		page.insertEntry(newEntry);
+		
+		// Step 5: Update parent key (push up the stolen entry's key)
+		parentEntry.setKey(lastEntry.getKey());
+		parent.updateEntry(parentEntry);
+		
+		// Step 6: Update parent pointers
+		updateParentPointers(tid, dirtypages, page);
+
 	}
 	
 	/**
@@ -839,6 +895,33 @@ public class BTreeFile implements DbFile {
 		// that the entries are evenly distributed. Be sure to update
 		// the corresponding parent entry. Be sure to update the parent
 		// pointers of all children in the entries that were moved.
+		// Step 1: Get the first entry from right sibling
+		BTreeEntry firstEntry = null;
+		Iterator<BTreeEntry> rightIt = rightSibling.iterator();
+		if (rightIt.hasNext()) {
+			firstEntry = rightIt.next();
+		}
+		
+		// Step 2: Remove it from right sibling
+		rightSibling.deleteKeyAndLeftChild(firstEntry);
+		
+		// Step 3: Create new entry with parent's key and appropriate child pointers
+		Field oldParentKey = parentEntry.getKey();
+		BTreePageId leftChild = page.reverseIterator().hasNext() ? 
+							page.reverseIterator().next().getRightChild() : null;
+		BTreePageId rightChild = firstEntry.getLeftChild();
+		
+		BTreeEntry newEntry = new BTreeEntry(oldParentKey, leftChild, rightChild);
+		
+		// Step 4: Insert the new entry into current page
+		page.insertEntry(newEntry);
+		
+		// Step 5: Update parent key (push up the stolen entry's key)
+		parentEntry.setKey(firstEntry.getKey());
+		parent.updateEntry(parentEntry);
+		
+		// Step 6: Update parent pointers
+		updateParentPointers(tid, dirtypages, page);
 	}
 	
 	/**
